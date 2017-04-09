@@ -1,33 +1,109 @@
-# Vehicle Detection
-[![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
-
-
-In this project, your goal is to write a software pipeline to detect vehicles in a video (start with the test_video.mp4 and later implement on full project_video.mp4), but the main output or product we want you to create is a detailed writeup of the project.  Check out the [writeup template](https://github.com/udacity/CarND-Vehicle-Detection/blob/master/writeup_template.md) for this project and use it as a starting point for creating your own writeup.  
-
-Creating a great writeup:
----
-A great writeup should include the rubric points as well as your description of how you addressed each point.  You should include a detailed description of the code used in each step (with line-number references and code snippets where necessary), and links to other supporting documents or external references.  You should include images in your writeup to demonstrate how your code works with examples.  
-
-All that said, please be concise!  We're not looking for you to write a book here, just a brief description of how you passed each rubric point, and references to the relevant code :). 
-
-You can submit your writeup in markdown or use another method and submit a pdf instead.
-
-The Project
----
+# Vehicle Detection Project
 
 The goals / steps of this project are the following:
 
-* Perform a Histogram of Oriented Gradients (HOG) feature extraction on a labeled training set of images and train a classifier Linear SVM classifier
-* Optionally, you can also apply a color transform and append binned color features, as well as histograms of color, to your HOG feature vector. 
-* Note: for those first two steps don't forget to normalize your features and randomize a selection for training and testing.
-* Implement a sliding-window technique and use your trained classifier to search for vehicles in images.
-* Run your pipeline on a video stream (start with the test_video.mp4 and later implement on full project_video.mp4) and create a heat map of recurring detections frame by frame to reject outliers and follow detected vehicles.
-* Estimate a bounding box for vehicles detected.
+1. Perform a Histogram of Oriented Gradients (HOG) feature extraction on a labeled training set of images.
+1. Apply a color transform and append binned color features, as well as histograms of color, to the HOG feature vector.
+1. Train a SVM classifier.
+1. Implement a sliding-window technique and use your trained classifier to search for vehicles in images.
+1. Run the pipeline on a video stream and create a heat map of recurring detections frame by frame to reject outliers and follow detected vehicles.
+1. Estimate a bounding box for vehicles detected.
 
-Here are links to the labeled data for [vehicle](https://s3.amazonaws.com/udacity-sdc/Vehicle_Tracking/vehicles.zip) and [non-vehicle](https://s3.amazonaws.com/udacity-sdc/Vehicle_Tracking/non-vehicles.zip) examples to train your classifier.  These example images come from a combination of the [GTI vehicle image database](http://www.gti.ssr.upm.es/data/Vehicle_database.html), the [KITTI vision benchmark suite](http://www.cvlibs.net/datasets/kitti/), and examples extracted from the project video itself.   You are welcome and encouraged to take advantage of the recently released [Udacity labeled dataset](https://github.com/udacity/self-driving-car/tree/master/annotations) to augment your training data.  
+[//]: # (Image References)
+[example]: ./output_images/example_image.png
+[converted]: ./output_images/converted_image.png
+[window0]: ./output_images/window_0.png
+[window1]: ./output_images/window_1.png
+[window2]: ./output_images/window_2.png
+[window3]: ./output_images/window_3.png
+[window4]: ./output_images/window_4.png
+[window5]: ./output_images/window_5.png
+[detected1]: ./output_images/test1_detected.jpg
+[detected2]: ./output_images/test6_detected.jpg
+[frame300]: ./output_images/flame_300.png
+[frame400]: ./output_images/flame_400.png
+[frame500]: ./output_images/flame_500.png
+[frame600]: ./output_images/flame_600.png
+[heat300]: ./output_images/flame_300_heat.png
+[heat400]: ./output_images/flame_400_heat.png
+[heat500]: ./output_images/flame_500_heat.png
+[heat600]: ./output_images/flame_600_heat.png
 
-Some example images for testing your pipeline on single frames are located in the `test_images` folder.  To help the reviewer examine your work, please save examples of the output from each stage of your pipeline in the folder called `ouput_images`, and include them in your writeup for the project by describing what each image shows.    The video called `project_video.mp4` is the video your pipeline should work well on.  
 
-**As an optional challenge** Once you have a working pipeline for vehicle detection, add in your lane-finding algorithm from the last project to do simultaneous lane-finding and vehicle detection!
+## Histogram of Oriented Gradients (HOG) feature extraction
 
-**If you're feeling ambitious** (also totally optional though), don't stop there!  We encourage you to go out and take video of your own, and show us how you would implement this project on a new video!
+The code for this step is contained in lines 42 through 72 of the file called `feature_extractor.py`.
+
+I started by reading in all the `vehicle` and `non-vehicle` images.  Here is an example of one of each of the `vehicle` and `non-vehicle` classes:
+
+![Example image][example]
+
+I then explored different color spaces and different `skimage.feature.hog()` parameters.  I grabbed images from each of the two classes and displayed them to get a feel for what the `skimage.feature.hog()` output looks like.
+
+Here is an example using the `YCrCb` color space and HOG parameters of `orientations=9`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`:
+
+![Image conversion][converted]
+
+I tried various combinations of parameters and chose following convination:
+
+- Color space: YCrCb
+- Image channels used for the feature: All channels
+- The number of orientations: 9
+- The number of pixels per cell: 8
+- The number of cells per block: 2
+
+For the color space, I tried `RGB`, `HSV`, `HLS` and `LUV` other than `YCrCb`.  These color spaces achieved lower test accuracy on the classifier and got more false positives on vehicle detection compared with `YCrCb`.  Regarding the channel of the image, using single channel increased the number of false positives.  As for the remaining parameters, I chosed to reduce false positives on the classification.
+
+## Binned color feature and histogram feature extraction
+
+The code for this step is contained in lines 11 through 40 of the file called `feature_extractor.py`.
+
+In addition to HOG feature, I decided to use color features, which are binned color feature and histogram feature, for my SVM classifier.  I converted each image to `LUV` color space in advance. For binned color feature, I converted each image to a `32 x 32` pixel image and used it as a feature.  Regarding the histogram feature, I calculated histogram of each color channnel with `32` bins, and use them for feature.  Though I tried different values and combinations of parameter, I found that these parameter could detect all the cars shown in the video.
+
+## SVM classifier
+
+The code for this step is contained in lines 84 through 157 of the file called `find_car.py`.
+
+Before I train SVM, I extracted all the images into three features introduced above, and concatenated as a vector.  To prevent some feature from dominating in the following step, I normalized a feature vector usinge `sklearn.preprocessing.StandardScaler`.  After normalization, I randomly splited all the images into 80 percent for training set and 20 percent for test set.
+
+Then I trained a `sklearn.svm.LinearSVC` using features conputed above.  As a result of training, the test accuracy was 98.2 percent.
+
+## Sliding Window Search
+
+I decided to search the image with windows with 6 different scalse as shown below:
+
+| Scale: 1.0           | Scale: 1.6           | Scale: 2.2           |
+|----------------------|----------------------|----------------------|
+| ![Window-0][window0] | ![Window-1][window1] | ![Window-2][window2] |
+
+| Scale: 2.8           | Scale: 3.4           | Scale: 4.0           |
+|----------------------|----------------------|----------------------|
+| ![Window-3][window3] | ![Window-4][window4] | ![Window-5][window5] |
+
+Each window was overlapped by 25 percent.  I decided the scales and search scope as above to cover the area where cars would be present.  The sliding window search provided some false positives, and I ignored these by the number of overlapes.  Concretely, I ignored places where the overlap is `8` or less.
+
+As a result, I got images as below:
+
+![Detected-1][detected1]
+![Detected-2][detected2]
+
+---
+
+## Video Implementation
+
+Here's a [link to my video result](./output_images/project_video.mp4)
+
+I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  In addition to these, I mixed previously detected bouding boxes with current detected ones to ignore false positives.  This is based on the feature that false positives are less likely to be detected in consecutive frames.
+
+Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes:
+
+| Bounding box (Flame 300) | Heatmap (Flame 300)   |
+|--------------------------|-----------------------|
+| ![BBox-300][frame300]    | ![H-map-300][heat300] |
+
+
+---
+
+## Discussion
+
+My sliding window search with SVM classifier did not work well without frame by frame compensation.  Compensation using several video frames worked well, however, this aproach provided delay because the compensation works as low pass filter.  I think this have to be improved if accute detections are needed.
