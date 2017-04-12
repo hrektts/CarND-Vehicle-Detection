@@ -3,6 +3,7 @@
 """
 import numpy as np
 import cv2
+from skimage.feature import hog
 
 from logging import getLogger
 logger = getLogger(__name__)
@@ -38,35 +39,88 @@ def color_hist(image, nbins=32, bins_range=(0, 256)):
                                     channel3_hist[0]))
     return hist_features
 
-def extract_features(images, cspace='RGB', spatial_size=(32, 32),
-                     hist_bins=32, hist_range=(0, 256)):
+def convert_color_space(image, cspace='RGB'):
+    """ Convert color space of a image from RGB to specified one
+
+    Args:
+        image: A image to be processed
+        cspace: A color space for output image
+
+    Return:
+        A image converted
+    """
+    if cspace != 'RGB':
+        if cspace == 'HSV':
+            return cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+        elif cspace == 'LUV':
+            return cv2.cvtColor(image, cv2.COLOR_RGB2LUV)
+        elif cspace == 'HLS':
+            return cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
+        elif cspace == 'YUV':
+            return cv2.cvtColor(image, cv2.COLOR_RGB2YUV)
+        elif cspace == 'YCrCb':
+            return cv2.cvtColor(image, cv2.COLOR_RGB2YCrCb)
+    else:
+        return np.copy(image)
+
+def extract_features(images,
+                     use_spatial=True, use_hist=True, use_hog=True,
+                     cspace_color='YCrCb',
+                     spatial_size=(32, 32),
+                     hist_bins=32, hist_range=(0, 256),
+                     cspace_hog='YCrCb',
+                     orient=9, pix_per_cell=8,
+                     cell_per_block=2, hog_channel='ALL'):
     """ Extract features from a list of images
 
     Args:
         images: A list of images to be processed
-        cspace: A color space into which the images are converted prior to processing
+        use_spatial: A flag for extracting spatial features
+        use_hist: A flag for extracting histogram features
+        use_hog: A flag for extracting HOG features
+        cspace_color: A color space into which the images are converted for color features
         spatial_size: Size of converted image
         hist_bins: The number of bins
         hist_range: The range of the bins
+        cspace_hog: A color space into which the images are converted for hog features
+        orient: The number of orientation bins
+        pix_per_cell: The cell size over which each gradient histogram is computed
+        cell_per_block: The size of local area
+        hog_channel: The channel of image which is used to compute HOG features
 
+    Returns:
+        Conbined features
     """
     features = []
     for image in images:
-        if cspace != 'RGB':
-            if cspace == 'HSV':
-                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-            elif cspace == 'LUV':
-                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2LUV)
-            elif cspace == 'HLS':
-                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
-            elif cspace == 'YUV':
-                feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YUV)
-        else:
-            feature_image = np.copy(image)
-
+        feature_image = convert_color_space(image, cspace=cspace_color)
         spatial_features = bin_spatial(feature_image, size=spatial_size)
         hist_features = color_hist(feature_image, nbins=hist_bins, bins_range=hist_range)
-        features.append(np.concatenate((spatial_features, hist_features)))
+        feature_image = convert_color_space(image, cspace=cspace_hog)
+        if hog_channel == 'ALL':
+            hog_features = \
+            [hog(feature_image[:, :, channel], orientations=orient,
+                 pixels_per_cell=(pix_per_cell, pix_per_cell),
+                 cells_per_block=(cell_per_block, cell_per_block),
+                 block_norm='L2-Hys', transform_sqrt=True,
+                 visualise=False, feature_vector=True) \
+             for channel in range(image.shape[2])]
+            hog_features = np.ravel(hog_features)
+        else:
+            hog_features = hog(feature_image[:, :, hog_channel], orientations=orient,
+                               pixels_per_cell=(pix_per_cell, pix_per_cell),
+                               cells_per_block=(cell_per_block, cell_per_block),
+                               block_norm='L2-Hys', transform_sqrt=True,
+                               visualise=False, feature_vector=True)
+
+        feature = []
+        if use_spatial:
+            feature.append(spatial_features)
+        if use_hist:
+            feature.append(hist_features)
+        if use_hog:
+            feature.append(hog_features)
+        features.append(np.concatenate(feature))
 
     return features
 
@@ -80,6 +134,7 @@ def main():
     import setting
     import util
 
+
     fnames = util.read_filename('../data/vehicles/', ['png'])
     cars = util.read_image(fnames)
     util.check_image_size(cars)
@@ -90,10 +145,11 @@ def main():
     util.check_image_size(notcars)
     util.check_image_data_type(notcars)
 
-    car_features = extract_features(cars, cspace='RGB', spatial_size=(32, 32),
-                                    hist_bins=32, hist_range=(0, 256))
-    notcar_features = extract_features(notcars, cspace='RGB', spatial_size=(32, 32),
-                                       hist_bins=32, hist_range=(0, 256))
+    car_features = extract_features(cars)
+    notcar_features = extract_features(notcars)
+
+    assert len(car_features[0]) == len(notcar_features[0])
+    logger.debug('%s features extracted', len(car_features[0]))
 
     x = np.vstack((car_features, notcar_features)).astype(np.float64)
     x_scaler = StandardScaler().fit(x)
@@ -105,14 +161,14 @@ def main():
     x_train, x_test, y_train, y_test = train_test_split(
         scaled_x, y, test_size=0.2, random_state=rand_state)
 
-    cls = LinearSVC()
+    clf = LinearSVC()
 
     logger.debug('train SVC...')
     t = time.time()
-    cls.fit(x_train, y_train)
+    clf.fit(x_train, y_train)
     t2 = time.time()
     logger.debug('takes %d seconds to finish training', round(t2 - t))
-    logger.debug('test accuracy of SVC = %.4lf', round(cls.score(x_test, y_test), 4))
+    logger.debug('test accuracy of SVC = %.4lf', round(clf.score(x_test, y_test), 4))
 
 if __name__ == '__main__':
     main()
