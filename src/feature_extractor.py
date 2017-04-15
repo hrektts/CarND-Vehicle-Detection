@@ -39,6 +39,38 @@ def color_hist(image, nbins=32, bins_range=(0, 256)):
                                     channel3_hist[0]))
     return hist_features
 
+def get_hog_features(image, orient, pix_per_cell, cell_per_block, hog_channel,
+                     feature_vec=True):
+    """ Return HOG features
+
+    Args:
+        image: A image to be processed
+        orient: The number of orientation bins
+        pix_per_cell: The cell size over which each gradient histogram is computed
+        cell_per_block: The size of local area
+        hog_channel: The channel of image which is used to compute HOG features
+        feature_vec: A type of feature returned; True: 1D-array, False: 2D-array
+
+    Return:
+        The HOG features
+    """
+    if hog_channel == 'ALL':
+        hog_features = \
+        [hog(image[:, :, channel], orientations=orient,
+             pixels_per_cell=(pix_per_cell, pix_per_cell),
+             cells_per_block=(cell_per_block, cell_per_block),
+             block_norm='L2-Hys', transform_sqrt=True,
+             visualise=False, feature_vector=feature_vec) \
+         for channel in range(image.shape[2])]
+        hog_features = np.ravel(hog_features)
+    else:
+        hog_features = hog(image[:, :, hog_channel], orientations=orient,
+                           pixels_per_cell=(pix_per_cell, pix_per_cell),
+                           cells_per_block=(cell_per_block, cell_per_block),
+                           block_norm='L2-Hys', transform_sqrt=True,
+                           visualise=False, feature_vector=feature_vec)
+    return hog_features
+
 def convert_color_space(image, cspace='RGB'):
     """ Convert color space of a image from RGB to specified one
 
@@ -63,7 +95,7 @@ def convert_color_space(image, cspace='RGB'):
     else:
         return np.copy(image)
 
-def extract_features(images,
+def extract_features(images, scale=1.0,
                      use_spatial=True, use_hist=True, use_hog=True,
                      cspace_color='YCrCb',
                      spatial_size=(32, 32),
@@ -75,6 +107,8 @@ def extract_features(images,
 
     Args:
         images: A list of images to be processed
+        scale: Scaling factor for a image (original_size/n)
+
         use_spatial: A flag for extracting spatial features
         use_hist: A flag for extracting histogram features
         use_hog: A flag for extracting HOG features
@@ -93,25 +127,20 @@ def extract_features(images,
     """
     features = []
     for image in images:
+        if scale != 1:
+            imshape = image.shape
+            image = cv2.resize(image,
+                               (np.int(imshape[1]/scale),
+                                np.int(imshape[0]/scale)))
+
         feature_image = convert_color_space(image, cspace=cspace_color)
         spatial_features = bin_spatial(feature_image, size=spatial_size)
         hist_features = color_hist(feature_image, nbins=hist_bins, bins_range=hist_range)
         feature_image = convert_color_space(image, cspace=cspace_hog)
-        if hog_channel == 'ALL':
-            hog_features = \
-            [hog(feature_image[:, :, channel], orientations=orient,
-                 pixels_per_cell=(pix_per_cell, pix_per_cell),
-                 cells_per_block=(cell_per_block, cell_per_block),
-                 block_norm='L2-Hys', transform_sqrt=True,
-                 visualise=False, feature_vector=True) \
-             for channel in range(image.shape[2])]
-            hog_features = np.ravel(hog_features)
-        else:
-            hog_features = hog(feature_image[:, :, hog_channel], orientations=orient,
-                               pixels_per_cell=(pix_per_cell, pix_per_cell),
-                               cells_per_block=(cell_per_block, cell_per_block),
-                               block_norm='L2-Hys', transform_sqrt=True,
-                               visualise=False, feature_vector=True)
+        hog_features = get_hog_features(image, orient=orient,
+                                        pix_per_cell=pix_per_cell,
+                                        cell_per_block=cell_per_block,
+                                        hog_channel=hog_channel)
 
         feature = []
         if use_spatial:
