@@ -58,7 +58,6 @@ class ImageProcessor:
 
         self.params = {}
         self.params['use_spatial'] = True
-        self.params['use_spatial'] = True
         self.params['use_hist'] = True
         self.params['use_hog'] = True
         self.params['cspace_color'] = 'YCrCb'
@@ -190,7 +189,6 @@ class ImageProcessor:
         orient = self.params['orient']
         pix_per_cell = self.params['pix_per_cell']
         cell_per_block = self.params['cell_per_block']
-        hog_channel = self.params['hog_channel']
         window = self.params['pos_img_size'][0]
         spatial_size = self.params['spatial_size']
         hist_bins = self.params['hist_bins']
@@ -198,8 +196,12 @@ class ImageProcessor:
         hog_channel = self.params['hog_channel']
         scaler = self.params['scaler']
         clf = self.params['clf']
+        use_spatial = self.params['use_spatial']
+        use_hist = self.params['use_hist']
+        use_hog = self.params['use_hog']
 
         draw_image = np.copy(image)
+        # convert jpeg value to png value
         image = image.astype(np.float32)/255
         for scale, ystart, ystop in zip(self.scales, self.ystarts, self.ystops):
             img_tosearch = image[ystart:ystop, :, :]
@@ -213,9 +215,13 @@ class ImageProcessor:
             ctrans_for_color = fe.convert_color_space(img_tosearch,
                                                       cspace=cspace_color)
 
+            '''
             hog_features = fe.get_hog_features(
                 ctrans_for_hog, orient=orient, pix_per_cell=pix_per_cell,
-                cell_per_block=cell_per_block, hog_channel=hog_channel)
+                cell_per_block=cell_per_block, hog_channel=hog_channel,
+                feature_vec=False)
+            print(hog_features.shape)
+            '''
 
             nxblocks = (img_tosearch.shape[1] // pix_per_cell) - 1
             nyblocks = (img_tosearch.shape[0] // pix_per_cell) - 1
@@ -258,14 +264,20 @@ class ImageProcessor:
                     hist_features = fe.color_hist(subimg, nbins=hist_bins,
                                                   bins_range=hist_range)
 
-                    features_scaled = scaler.transform(
-                        np.hstack((spatial_features,
-                                   hist_features,
-                                   hog_features)).reshape(1, -1))
+                    feature = []
+                    if use_spatial:
+                        feature.append(spatial_features)
+                    if use_hist:
+                        feature.append(hist_features)
+                    if use_hog:
+                        feature.append(hog_features)
 
+                    #feature = fe.extract_features([subimg])
+
+                    features_scaled = scaler.transform(np.concatenate(feature).reshape(1, -1))
                     pred = clf.predict(features_scaled)
 
-                    if test == True or pred == 1:
+                    if test or pred == 1:
                         xbox_left = np.int(xleft*scale)
                         ytop_draw = np.int(ytop*scale)
                         win_draw = np.int(window*scale)
@@ -277,8 +289,8 @@ class ImageProcessor:
                                 color = (0, 0, 255)
                                 line = 2
                         else:
-                            color = (255, 0, 0)
-                            line = 6
+                            color = (0, 0, 255)
+                            line = 2
 
                         cv2.rectangle(draw_image, (xbox_left, ytop_draw+ystart),
                                       (xbox_left+win_draw, ytop_draw+win_draw+ystart),
@@ -383,9 +395,9 @@ def main():
         plt.title('Example Not-car Image')
         plt.savefig(ooo.out_img_dir + '/' + 'example_image.png', bbox_inches='tight')
 
-    ooo.scales = np.linspace(1, 3.5, 7)
-    ooo.ystarts = np.linspace(380, 350, 7, dtype=np.int)
-    ooo.ystops = np.linspace(600, 800, 7, dtype=np.int)
+    ooo.scales = np.linspace(1, 3.5, 10)
+    ooo.ystarts = np.linspace(380, 350, 10, dtype=np.int)
+    ooo.ystops = np.linspace(600, 800, 10, dtype=np.int)
 
     #import window_search as ws
 
@@ -395,20 +407,20 @@ def main():
 
     out = ooo.find_object(img)
     #out = ooo.draw_window(img)
-
+    '''
+    import window_search as ws
+    out = ws.window_search(img, 400, 700, 1, ooo.params['clf'], ooo.params['scaler'],
+                           pix_per_cell=8)
+    '''
     fig = plt.figure()
     plt.imshow(out)
     plt.show()
 
 
 
-    ystart = 300
-    ystop = 700
-    scale = 4
-    '''
-    out = ws.window_search(img, ystart, ystop, scale, params['clf'], params['scaler'],
-                           pix_per_cell=8)
-    '''
+
+
+
 
     '''
     fig = plt.figure()
@@ -419,11 +431,12 @@ def main():
     def f(img):
         return ws.window_search(img, 400, 656, scale, params['clf'], params['scaler'],
                          pix_per_cell=8)
-
+    '''
+    '''
     clip = VideoFileClip('../test_video.mp4')
     output = '../output_images/test_video.mp4'
     logger.debug('start')
-    clip.fl_image(f).write_videofile(output, audio=False)
+    clip.fl_image(ooo.find_object).write_videofile(output, audio=False)
     '''
 
 if __name__ == '__main__':
