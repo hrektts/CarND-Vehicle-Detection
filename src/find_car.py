@@ -63,8 +63,8 @@ class ImageProcessor:
         self.params['use_hist'] = True
         self.params['use_hog'] = True
         self.params['cspace_color'] = 'YCrCb'
-        self.params['spatial_size'] = (16, 16)
-        self.params['hist_bins'] = 16
+        self.params['spatial_size'] = (32, 32)
+        self.params['hist_bins'] = 32
         self.params['hist_range'] = (0, 256)
         self.params['cspace_hog'] = 'YCrCb'
         self.params['orient'] = 9
@@ -170,6 +170,14 @@ class ImageProcessor:
     def draw_sample(self):
         """
         """
+        clf_param_file = self.data_dir + '/' + self.data_file
+        if os.path.exists(clf_param_file):
+            with open(clf_param_file, mode='rb') as f:
+                self.params = pickle.load(f)
+                logger.debug('classifier parameters are read from a file')
+        else:
+            self.params = self.train_classifier()
+
         fig = plt.figure(figsize=(14, 6))
         idx = 1
         img = self.params['pos_img_example']
@@ -216,6 +224,14 @@ class ImageProcessor:
         Args:
             image: A image to be process
         """
+        clf_param_file = self.data_dir + '/' + self.data_file
+        if os.path.exists(clf_param_file):
+            with open(clf_param_file, mode='rb') as f:
+                self.params = pickle.load(f)
+                logger.debug('classifier parameters are read from a file')
+        else:
+            self.params = self.train_classifier()
+
         tmp_scales = self.scales
         tmp_ystarts = self.ystarts
         tmp_ystops = self.ystops
@@ -265,6 +281,7 @@ class ImageProcessor:
         use_hist = self.params['use_hist']
         use_hog = self.params['use_hog']
 
+        '''
         draw_img = np.copy(image)
         image = image.astype(np.float32)/255
 
@@ -354,26 +371,9 @@ class ImageProcessor:
 
                         bboxes.append(((xbox_left, ytop_draw+ystart),
                                        (xbox_left+win_draw, ytop_draw+win_draw+ystart)))
-
-        heat = np.zeros_like(image[:, :, 0]).astype(np.float)
-        heat = bb.add_heat(heat, bboxes)
-        heat = bb.apply_threshold(heat, 8)
-        heatmap = np.clip(heat, 0, 255)
-        labels = label(heatmap)
-        draw_img = bb.draw_labeled_bboxes(draw_img, labels)
         '''
-                        cv2.rectangle(draw_img, (xbox_left, ytop_draw+ystart),
-                                      (xbox_left+win_draw, ytop_draw+win_draw+ystart),
-                                      color, line)
-        '''
-        '''
-                        hot_windows.append(((xbox_left, ytop_draw+y_start_stop[0]),(xbox_left+win_draw,ytop_draw+win_draw+y_start_stop[0])))
-        '''
-        #print("scale={}, windows={}".format(scale, i))
-        return draw_img
-
-    '''
         draw_image = np.copy(image)
+        test_image = np.copy(image)
         # convert jpeg value to png value
         image = image.astype(np.float32)/255
         bboxes = []
@@ -439,59 +439,27 @@ class ImageProcessor:
                             color = (0, 0, 255)
                             line = 2
 
-    '''
-    '''
-                        if pred == 1:
-                            import time
-                            name = str(time.clock()) + '.png'
-                            mpimg.imsave('../tmp/' + name, subimg)
+                        if test:
+                            cv2.rectangle(test_image, (xbox_left, ytop_draw+ystart),
+                                          (xbox_left+win_draw,
+                                           ytop_draw+win_draw+ystart),
+                                          color, line)
 
-                            tmpimg = mpimg.imread('../tmp/' + name)
-                            tmpimg = tmpimg[:, :, 0:3]
-                            #img = img.astype(np.float32)/255
-                            tmpfeatures = fe.extract_features(
-                                [tmpimg],
-                                use_spatial=self.params['use_spatial'],
-                                use_hist=self.params['use_hist'],
-                                use_hog=self.params['use_hog'],
-                                cspace_color=self.params['cspace_color'],
-                                spatial_size=self.params['spatial_size'],
-                                hist_bins=self.params['hist_bins'],
-                                hist_range=self.params['hist_range'],
-                                cspace_hog=self.params['cspace_hog'],
-                                orient=self.params['orient'],
-                                pix_per_cell=self.params['pix_per_cell'],
-                                cell_per_block=self.params['cell_per_block'],
-                                hog_channel=self.params['hog_channel'])
-                            clf = self.params['clf']
-                            scaler = self.params['scaler']
-                            tmpfeatures_scaled = scaler.transform(tmpfeatures)
-                            tmppred = clf.predict(tmpfeatures_scaled)
-                            print(name, subimg.shape, pred, tmppred)
-                            if tmppred != 1:
-                                continue
-
-                            #_fig = plt.figure()
-                            #plt.imshow(subimg)
-                            #plt.show()
-    '''
-    '''
-                        cv2.rectangle(draw_image, (xbox_left, ytop_draw+ystart),
-                                      (xbox_left+win_draw, ytop_draw+win_draw+ystart),
-                                      color, line)
-    '''
-    '''
                         bboxes.append(((xbox_left, ytop_draw+ystart),
                                        (xbox_left+win_draw, ytop_draw+win_draw+ystart)))
 
         heat = np.zeros_like(image[:, :, 0]).astype(np.float)
-        heat = add_heat(heat, bboxes)
-        heat = apply_threshold(heat, 1)
+        heat = bb.add_heat(heat, bboxes)
+        heat = bb.apply_threshold(heat, 10)
         heatmap = np.clip(heat, 0, 255)
         labels = label(heatmap)
-        draw_image = draw_labeled_bboxes(draw_image, labels)
-    '''
-        #return draw_image
+        draw_image = bb.draw_labeled_bboxes(draw_image, labels)
+
+        if test:
+            return test_image
+        else:
+            return draw_image
+
 
 def main():
     import setting
@@ -512,16 +480,19 @@ def main():
                          '../data/non-vehicles/',
                          '../data/',
                          '../output_images/')
-    ooo.scales = np.linspace(1, 4.0, 10)
-    ooo.ystarts = np.linspace(380, 350, 10, dtype=np.int)
-    ooo.ystops = np.linspace(600, 800, 10, dtype=np.int)
+    ooo.scales = np.linspace(1, 4.0, 6)
+    ooo.ystarts = np.linspace(380, 350, 6, dtype=np.int)
+    ooo.ystops = np.linspace(600, 800, 6, dtype=np.int)
 
     if force:
         ooo.train_classifier()
     else:
-        ooo.process_test_imgs()
+        ooo.draw_sample()
 
     if test:
+        logger.debug('plot windows')
+        ooo.draw_window()
+
         _fig = plt.figure()
         plt.subplot(121)
         plt.imshow(ooo.params['pos_img_example'])
@@ -531,10 +502,8 @@ def main():
         plt.title('Example Not-car Image')
         plt.savefig(ooo.out_img_dir + '/' + 'example_image.png', bbox_inches='tight')
 
-        ooo.draw_sample()
-
-    if test:
-        ooo.draw_window()
+        logger.debug('process test images')
+        ooo.process_test_imgs()
 
     if check:
         name = '../tmp/1.201591.png'
@@ -563,10 +532,10 @@ def main():
         print(pred)
 
     if not test and not check:
-        clip = VideoFileClip('../test_video.mp4')
-        output = '../output_images/test_video.mp4'
-        #clip = VideoFileClip('../project_video.mp4')
-        #output = '../output_images/project_video.mp4'
+        #clip = VideoFileClip('../test_video.mp4')
+        #output = '../output_images/test_video.mp4'
+        clip = VideoFileClip('../project_video.mp4')
+        output = '../output_images/project_video.mp4'
         clip.fl_image(ooo.find_object).write_videofile(output, audio=False)
 
 if __name__ == '__main__':
