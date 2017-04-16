@@ -2,6 +2,7 @@
 """ Vehicle Detection Project
 """
 import getopt
+import glob
 import os
 import pickle
 import sys
@@ -9,13 +10,13 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
 import cv2
-from sklearn.svm import LinearSVC
+from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from skimage.feature import hog
 from scipy.ndimage.measurements import label
 from moviepy.editor import VideoFileClip
 import feature_extractor as fe
+import bounding_box as bb
 import util
 
 from logging import getLogger
@@ -62,8 +63,8 @@ class ImageProcessor:
         self.params['use_hist'] = True
         self.params['use_hog'] = True
         self.params['cspace_color'] = 'YCrCb'
-        self.params['spatial_size'] = (32, 32)
-        self.params['hist_bins'] = 32
+        self.params['spatial_size'] = (16, 16)
+        self.params['hist_bins'] = 16
         self.params['hist_range'] = (0, 256)
         self.params['cspace_hog'] = 'YCrCb'
         self.params['orient'] = 9
@@ -80,7 +81,7 @@ class ImageProcessor:
         negimgs = util.read_image(fnames)
 
         pos_features = fe.extract_features(
-            posimgs, scale=1.0,
+            posimgs,
             use_spatial=self.params['use_spatial'],
             use_hist=self.params['use_hist'],
             use_hog=self.params['use_hog'],
@@ -95,7 +96,7 @@ class ImageProcessor:
             hog_channel=self.params['hog_channel'])
 
         neg_features = fe.extract_features(
-            negimgs, scale=1.0,
+            negimgs,
             use_spatial=self.params['use_spatial'],
             use_hist=self.params['use_hist'],
             use_hog=self.params['use_hog'],
@@ -120,7 +121,7 @@ class ImageProcessor:
         x_train, x_test, y_train, y_test = train_test_split(
             scaled_x, y, test_size=0.2, random_state=np.random.randint(0, 100))
 
-        clf = LinearSVC()
+        clf = SVC()
 
         logger.debug('train SVC...')
         clf.fit(x_train, y_train)
@@ -157,6 +158,15 @@ class ImageProcessor:
         else:
             self.params = self.train_classifier()
 
+        fnames = glob.glob('../test_images/*.jpg')
+        for name in fnames:
+            img = mpimg.imread(name)
+            out = self.find_object(img)
+            ftitle, fext = os.path.splitext(os.path.basename(name))
+
+            path = self.out_img_dir + '/' + ftitle + '_detected'+ fext
+            mpimg.imsave(path, out)
+
     def draw_sample(self):
         """
         """
@@ -185,28 +195,19 @@ class ImageProcessor:
 
             himg = fe.convert_color_space(img, self.params['cspace_hog'])
             for channel in range(3):
-                ch = img[:,:,channel]
-                print(sum(sum(ch)))
-                ch = himg[:,:,channel]
-                print(sum(sum(ch)))
-                _, hogimg = hog(
+                _, hogimg = fe.get_hog_features(
                     himg[:, :, channel],
-                    orientations=self.params['orient'],
-                    pixels_per_cell=(self.params['pix_per_cell'],
-                                     self.params['pix_per_cell']),
-                    cells_per_block=(self.params['cell_per_block'],
-                                     self.params['cell_per_block']),
-                    block_norm='L2-Hys', transform_sqrt=True,
-                    visualise=True, feature_vector=True)
+                    orient=self.params['orient'],
+                    pix_per_cell=self.params['pix_per_cell'],
+                    cell_per_block=self.params['cell_per_block'],
+                    vis=True, feature_vec=False)
 
                 fig.add_subplot(2, 7, idx)
                 plt.imshow(hogimg, cmap='gray')
                 plt.title('Hog Ch-{0}'.format(channel+1))
                 idx += 1
-        #plt.tight_layout()
         plt.subplots_adjust(left=0.02, bottom=0.02, right=0.98, top=0.98,
                              wspace=0.5, hspace=0.)
-        #plt.show()
         plt.savefig(self.out_img_dir + '/' + 'converted_image.png', bbox_inches='tight')
 
     def draw_window(self, image=None):
@@ -264,6 +265,114 @@ class ImageProcessor:
         use_hist = self.params['use_hist']
         use_hog = self.params['use_hog']
 
+        draw_img = np.copy(image)
+        image = image.astype(np.float32)/255
+
+        bboxes = []
+        for ystart, ystop, scale in zip(self.ystarts, self.ystops, self.scales):
+            img_tosearch = image[ystart:ystop, :, :]
+            ctrans_tosearch = fe.convert_color_space(img_tosearch, cspace=cspace_color)
+            if scale != 1:
+                imshape = ctrans_tosearch.shape
+                ctrans_tosearch = cv2.resize(ctrans_tosearch,
+                                             (np.int(imshape[1]/scale),
+                                              np.int(imshape[0]/scale)))
+
+            ch1 = ctrans_tosearch[:, :, 0]
+            ch2 = ctrans_tosearch[:, :, 1]
+            ch3 = ctrans_tosearch[:, :, 2]
+
+            nxblocks = (ch1.shape[1] // pix_per_cell)-1
+            nyblocks = (ch1.shape[0] // pix_per_cell)-1
+
+            hog1 = fe.get_hog_features(ch1, orient, pix_per_cell, cell_per_block,
+                                       feature_vec=False)
+            hog2 = fe.get_hog_features(ch2, orient, pix_per_cell, cell_per_block,
+                                       feature_vec=False)
+            hog3 = fe.get_hog_features(ch3, orient, pix_per_cell, cell_per_block,
+                                       feature_vec=False)
+
+            window = 64
+            nblocks_per_window = (window // pix_per_cell)-1
+            cells_per_step = 1
+            nxsteps = (nxblocks - nblocks_per_window) // cells_per_step
+            nysteps = (nyblocks - nblocks_per_window) // cells_per_step
+
+            for xb in range(nxsteps+1):
+                for yb in range(nysteps):
+                    if xb == (nxsteps + 1):
+                        xpos = ch1.shape[1] - nblocks_per_window
+                    else:
+                        xpos = xb*cells_per_step
+
+                    ypos = yb*cells_per_step
+
+                    hog_feat1 = hog1[ypos:ypos+nblocks_per_window,
+                                     xpos:xpos+nblocks_per_window].ravel()
+                    hog_feat2 = hog2[ypos:ypos+nblocks_per_window,
+                                     xpos:xpos+nblocks_per_window].ravel()
+                    hog_feat3 = hog3[ypos:ypos+nblocks_per_window,
+                                     xpos:xpos+nblocks_per_window].ravel()
+
+                    if hog_channel == 'ALL':
+                        hog_features = np.hstack((hog_feat1, hog_feat2, hog_feat3))
+                    elif hog_channel == '0':
+                        hog_features = hog_feat1
+                    elif hog_channel == '1':
+                        hog_features = hog_feat2
+                    elif hog_channel == '2':
+                        hog_features = hog_feat3
+
+                    xleft = xpos*pix_per_cell
+                    ytop = ypos*pix_per_cell
+
+                    subimg = cv2.resize(ctrans_tosearch[ytop:ytop+window, xleft:xleft+window], (64,64))
+
+                    spatial_features = fe.bin_spatial(subimg, size=spatial_size)
+                    hist_features = fe.color_hist(subimg, nbins=hist_bins)
+
+                    img_features = []
+                    if use_spatial:
+                        img_features.append(spatial_features)
+                    if use_hist:
+                        img_features.append(hist_features)
+                    if use_hog:
+                        img_features.append(hog_features)
+
+                    img_features = np.concatenate(img_features).reshape(1, -1)
+
+                    test_features = scaler.transform(img_features)
+                    test_prediction = clf.predict(test_features)
+
+                    xbox_left = np.int(xleft*scale)
+                    ytop_draw = np.int(ytop*scale)
+                    win_draw = np.int(window*scale)
+
+                    if test_prediction == 1:
+                        color = (0, 0, 255)
+                        line = 2
+
+                        bboxes.append(((xbox_left, ytop_draw+ystart),
+                                       (xbox_left+win_draw, ytop_draw+win_draw+ystart)))
+
+        heat = np.zeros_like(image[:, :, 0]).astype(np.float)
+        heat = bb.add_heat(heat, bboxes)
+        heat = bb.apply_threshold(heat, 8)
+        heatmap = np.clip(heat, 0, 255)
+        labels = label(heatmap)
+        draw_img = bb.draw_labeled_bboxes(draw_img, labels)
+        '''
+                        cv2.rectangle(draw_img, (xbox_left, ytop_draw+ystart),
+                                      (xbox_left+win_draw, ytop_draw+win_draw+ystart),
+                                      color, line)
+        '''
+        '''
+                        hot_windows.append(((xbox_left, ytop_draw+y_start_stop[0]),(xbox_left+win_draw,ytop_draw+win_draw+y_start_stop[0])))
+        '''
+        #print("scale={}, windows={}".format(scale, i))
+        return draw_img
+
+    '''
         draw_image = np.copy(image)
         # convert jpeg value to png value
         image = image.astype(np.float32)/255
@@ -285,10 +394,12 @@ class ImageProcessor:
             nxsteps = (nxblocks - nblocks_per_window) // cells_per_step
             nysteps = (nyblocks - nblocks_per_window) // cells_per_step
 
-            for xb in range(nxsteps):
+            for xb in range(nxsteps+1):
                 for yb in range(nysteps):
-
-                    xleft = xb*pics_per_step
+                    if xb == (nxsteps+1):
+                        xleft = img_tosearch.shape[1] - nblocks_per_window
+                    else:
+                        xleft = xb*pics_per_step
                     ytop = yb*pics_per_step
 
                     subimg = cv2.resize(
@@ -296,7 +407,7 @@ class ImageProcessor:
                         (window, window))
 
                     feature = fe.extract_features(
-                        [subimg], scale=1.0,
+                        [subimg],
                         use_spatial=use_spatial,
                         use_hist=use_hist,
                         use_hog=use_hog,
@@ -310,7 +421,7 @@ class ImageProcessor:
                         cell_per_block=cell_per_block,
                         hog_channel=hog_channel)
 
-                    features_scaled = scaler.transform(feature)
+                    features_scaled = scaler.transform(feature[0].reshape(1, -1))
                     pred = clf.predict(features_scaled)
 
                     if test or pred == 1:
@@ -328,6 +439,8 @@ class ImageProcessor:
                             color = (0, 0, 255)
                             line = 2
 
+    '''
+    '''
                         if pred == 1:
                             import time
                             name = str(time.clock()) + '.png'
@@ -337,7 +450,7 @@ class ImageProcessor:
                             tmpimg = tmpimg[:, :, 0:3]
                             #img = img.astype(np.float32)/255
                             tmpfeatures = fe.extract_features(
-                                [tmpimg], scale=1.0,
+                                [tmpimg],
                                 use_spatial=self.params['use_spatial'],
                                 use_hist=self.params['use_hist'],
                                 use_hog=self.params['use_hog'],
@@ -361,11 +474,13 @@ class ImageProcessor:
                             #_fig = plt.figure()
                             #plt.imshow(subimg)
                             #plt.show()
-
+    '''
+    '''
                         cv2.rectangle(draw_image, (xbox_left, ytop_draw+ystart),
                                       (xbox_left+win_draw, ytop_draw+win_draw+ystart),
                                       color, line)
-        '''
+    '''
+    '''
                         bboxes.append(((xbox_left, ytop_draw+ystart),
                                        (xbox_left+win_draw, ytop_draw+win_draw+ystart)))
 
@@ -375,42 +490,8 @@ class ImageProcessor:
         heatmap = np.clip(heat, 0, 255)
         labels = label(heatmap)
         draw_image = draw_labeled_bboxes(draw_image, labels)
-        '''
-        return draw_image
-
-def add_heat(heatmap, bbox_list):
-    """ Iterate through list of bboxes
-    """
-    for box in bbox_list:
-        # Add += 1 for all pixels inside each bbox
-        # Assuming each "box" takes the form ((x1, y1), (x2, y2))
-        heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
-
-    return heatmap
-
-def draw_labeled_bboxes(img, labels):
-    """ Iterate through all detected cars
-    """
-    for car_number in range(1, labels[1]+1):
-        # Find pixels with each car_number label value
-        nonzero = (labels[0] == car_number).nonzero()
-        # Identify x and y values of those pixels
-        nonzeroy = np.array(nonzero[0])
-        nonzerox = np.array(nonzero[1])
-        # Define a bounding box based on min/max x and y
-        bbox = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
-        # Draw the box on the image
-        cv2.rectangle(img, bbox[0], bbox[1], (0, 0, 255), 6)
-    # Return the image
-    return img
-
-
-def apply_threshold(heatmap, threshold):
-    """ Zero out pixels below the threshold
-    """
-    heatmap[heatmap <= threshold] = 0
-    # Return thresholded map
-    return heatmap
+    '''
+        #return draw_image
 
 def main():
     import setting
@@ -431,6 +512,9 @@ def main():
                          '../data/non-vehicles/',
                          '../data/',
                          '../output_images/')
+    ooo.scales = np.linspace(1, 4.0, 10)
+    ooo.ystarts = np.linspace(380, 350, 10, dtype=np.int)
+    ooo.ystops = np.linspace(600, 800, 10, dtype=np.int)
 
     if force:
         ooo.train_classifier()
@@ -449,10 +533,6 @@ def main():
 
         ooo.draw_sample()
 
-    ooo.scales = np.linspace(1.5, 4.0, 10)
-    ooo.ystarts = np.linspace(380, 350, 10, dtype=np.int)
-    ooo.ystops = np.linspace(600, 800, 10, dtype=np.int)
-
     if test:
         ooo.draw_window()
 
@@ -463,7 +543,7 @@ def main():
         print(img.shape)
         #img = img.astype(np.float32)/255
         features = fe.extract_features(
-            [img], scale=1.0,
+            [img],
             use_spatial=ooo.params['use_spatial'],
             use_hist=ooo.params['use_hist'],
             use_hog=ooo.params['use_hog'],
