@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
 import cv2
-from sklearn.svm import SVC
+from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from scipy.ndimage.measurements import label
@@ -62,7 +62,7 @@ class ImageProcessor:
         self.params['use_spatial'] = True
         self.params['use_hist'] = True
         self.params['use_hog'] = True
-        self.params['cspace_color'] = 'YCrCb'
+        self.params['cspace_color'] = 'LUV'
         self.params['spatial_size'] = (32, 32)
         self.params['hist_bins'] = 32
         self.params['hist_range'] = (0, 256)
@@ -71,6 +71,15 @@ class ImageProcessor:
         self.params['pix_per_cell'] = 8
         self.params['cell_per_block'] = 2
         self.params['hog_channel'] = 'ALL'
+
+        self.p_heat = None
+        self.pp_heat = None
+        self.idx = 0
+
+    def reset(self):
+        """ Reset image processor
+        """
+        self.idx = 0
 
     def train_classifier(self):
         """ Train SVC
@@ -121,7 +130,7 @@ class ImageProcessor:
         x_train, x_test, y_train, y_test = train_test_split(
             scaled_x, y, test_size=0.2, random_state=np.random.randint(0, 100))
 
-        clf = SVC()
+        clf = LinearSVC()
 
         logger.debug('train SVC...')
         clf.fit(x_train, y_train)
@@ -148,7 +157,7 @@ class ImageProcessor:
             logger.debug('classifier data is saved as %s', fname)
 
     def process_test_imgs(self):
-        """ TODO: Add docstring
+        """ Search car on test images
         """
         clf_param_file = self.data_dir + '/' + self.data_file
         if os.path.exists(clf_param_file):
@@ -168,7 +177,7 @@ class ImageProcessor:
             mpimg.imsave(path, out)
 
     def draw_sample(self):
-        """
+        """ Draw sample images of feature extraction
         """
         clf_param_file = self.data_dir + '/' + self.data_file
         if os.path.exists(clf_param_file):
@@ -246,10 +255,8 @@ class ImageProcessor:
             self.ystops = [ystop]
 
             out = self.find_object(image, test=True)
-            _fig = plt.figure()
-            plt.imshow(out)
-            plt.savefig(self.out_img_dir + '/' + 'window_' + str(i) + '.png',
-                        bbox_inches='tight')
+            path = self.out_img_dir + '/' + 'window_' + str(i) + '.png'
+            mpimg.imsave(path, out)
             i += 1
 
         self.scales = tmp_scales
@@ -281,97 +288,6 @@ class ImageProcessor:
         use_hist = self.params['use_hist']
         use_hog = self.params['use_hog']
 
-        '''
-        draw_img = np.copy(image)
-        image = image.astype(np.float32)/255
-
-        bboxes = []
-        for ystart, ystop, scale in zip(self.ystarts, self.ystops, self.scales):
-            img_tosearch = image[ystart:ystop, :, :]
-            ctrans_tosearch = fe.convert_color_space(img_tosearch, cspace=cspace_color)
-            if scale != 1:
-                imshape = ctrans_tosearch.shape
-                ctrans_tosearch = cv2.resize(ctrans_tosearch,
-                                             (np.int(imshape[1]/scale),
-                                              np.int(imshape[0]/scale)))
-
-            ch1 = ctrans_tosearch[:, :, 0]
-            ch2 = ctrans_tosearch[:, :, 1]
-            ch3 = ctrans_tosearch[:, :, 2]
-
-            nxblocks = (ch1.shape[1] // pix_per_cell)-1
-            nyblocks = (ch1.shape[0] // pix_per_cell)-1
-
-            hog1 = fe.get_hog_features(ch1, orient, pix_per_cell, cell_per_block,
-                                       feature_vec=False)
-            hog2 = fe.get_hog_features(ch2, orient, pix_per_cell, cell_per_block,
-                                       feature_vec=False)
-            hog3 = fe.get_hog_features(ch3, orient, pix_per_cell, cell_per_block,
-                                       feature_vec=False)
-
-            window = 64
-            nblocks_per_window = (window // pix_per_cell)-1
-            cells_per_step = 1
-            nxsteps = (nxblocks - nblocks_per_window) // cells_per_step
-            nysteps = (nyblocks - nblocks_per_window) // cells_per_step
-
-            for xb in range(nxsteps+1):
-                for yb in range(nysteps):
-                    if xb == (nxsteps + 1):
-                        xpos = ch1.shape[1] - nblocks_per_window
-                    else:
-                        xpos = xb*cells_per_step
-
-                    ypos = yb*cells_per_step
-
-                    hog_feat1 = hog1[ypos:ypos+nblocks_per_window,
-                                     xpos:xpos+nblocks_per_window].ravel()
-                    hog_feat2 = hog2[ypos:ypos+nblocks_per_window,
-                                     xpos:xpos+nblocks_per_window].ravel()
-                    hog_feat3 = hog3[ypos:ypos+nblocks_per_window,
-                                     xpos:xpos+nblocks_per_window].ravel()
-
-                    if hog_channel == 'ALL':
-                        hog_features = np.hstack((hog_feat1, hog_feat2, hog_feat3))
-                    elif hog_channel == '0':
-                        hog_features = hog_feat1
-                    elif hog_channel == '1':
-                        hog_features = hog_feat2
-                    elif hog_channel == '2':
-                        hog_features = hog_feat3
-
-                    xleft = xpos*pix_per_cell
-                    ytop = ypos*pix_per_cell
-
-                    subimg = cv2.resize(ctrans_tosearch[ytop:ytop+window, xleft:xleft+window], (64,64))
-
-                    spatial_features = fe.bin_spatial(subimg, size=spatial_size)
-                    hist_features = fe.color_hist(subimg, nbins=hist_bins)
-
-                    img_features = []
-                    if use_spatial:
-                        img_features.append(spatial_features)
-                    if use_hist:
-                        img_features.append(hist_features)
-                    if use_hog:
-                        img_features.append(hog_features)
-
-                    img_features = np.concatenate(img_features).reshape(1, -1)
-
-                    test_features = scaler.transform(img_features)
-                    test_prediction = clf.predict(test_features)
-
-                    xbox_left = np.int(xleft*scale)
-                    ytop_draw = np.int(ytop*scale)
-                    win_draw = np.int(window*scale)
-
-                    if test_prediction == 1:
-                        color = (0, 0, 255)
-                        line = 2
-
-                        bboxes.append(((xbox_left, ytop_draw+ystart),
-                                       (xbox_left+win_draw, ytop_draw+win_draw+ystart)))
-        '''
         draw_image = np.copy(image)
         test_image = np.copy(image)
         # convert jpeg value to png value
@@ -450,10 +366,25 @@ class ImageProcessor:
 
         heat = np.zeros_like(image[:, :, 0]).astype(np.float)
         heat = bb.add_heat(heat, bboxes)
-        heat = bb.apply_threshold(heat, 10)
+        if self.p_heat is not None:
+            heat = heat * 0.6 + self.p_heat * 0.4
+        if self.pp_heat is not None:
+            heat = heat * 0.8 + self.pp_heat * 0.2
+        heat = bb.apply_threshold(heat, 13)
         heatmap = np.clip(heat, 0, 255)
         labels = label(heatmap)
         draw_image = bb.draw_labeled_bboxes(draw_image, labels)
+
+        self.pp_heat = self.p_heat
+        self.p_heat = heat
+
+        if self.idx == 100 or self.idx == 200 or self.idx == 300:
+            path = self.out_img_dir + '/' + 'flame_' + str(self.idx) + '_heat.png'
+            mpimg.imsave(path, heat, cmap='hot')
+            path = self.out_img_dir + '/' + 'flame_' + str(self.idx) + '.png'
+            mpimg.imsave(path, draw_image)
+
+        self.idx += 1
 
         if test:
             return test_image
@@ -532,6 +463,7 @@ def main():
         print(pred)
 
     if not test and not check:
+        ooo.reset()
         #clip = VideoFileClip('../test_video.mp4')
         #output = '../output_images/test_video.mp4'
         clip = VideoFileClip('../project_video.mp4')
