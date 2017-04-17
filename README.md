@@ -91,7 +91,7 @@ As a result, I got images as below:
 
 ## Video Implementation
 
-Here's a [link to my video result](./project_video.mp4)
+Here's a [link to my video result](./output_images/project_video.mp4)
 
 I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  In addition to these, I mixed previously detected bouding boxes with current detected ones to ignore false positives.  This is based on the feature that false positives are less likely to be detected in consecutive frames.
 
@@ -101,17 +101,6 @@ Here's an example result showing the heatmap from a series of frames of video, t
 |--------------------------|-----------------------|
 | ![BBox-300][frame300]    | ![H-map-300][heat300] |
 
-| Bounding box (Flame 400) | Heatmap (Flame 400)   |
-|--------------------------|-----------------------|
-| ![BBox-400][frame400]    | ![H-map-400][heat400] |
-
-| Bounding box (Flame 500) | Heatmap (Flame 500)   |
-|--------------------------|-----------------------|
-| ![BBox-500][frame500]    | ![H-map-500][heat500] |
-
-| Bounding box (Flame 600) | Heatmap (Flame 600)   |
-|--------------------------|-----------------------|
-| ![BBox-600][frame600]    | ![H-map-600][heat600] |
 
 ---
 
