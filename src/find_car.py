@@ -170,6 +170,7 @@ class ImageProcessor:
         fnames = glob.glob('../test_images/*.jpg')
         for name in fnames:
             img = mpimg.imread(name)
+            self.reset()
             out = self.find_object(img)
             ftitle, fext = os.path.splitext(os.path.basename(name))
 
@@ -378,7 +379,7 @@ class ImageProcessor:
         self.pp_heat = self.p_heat
         self.p_heat = heat
 
-        if self.idx == 100 or self.idx == 200 or self.idx == 300:
+        if self.idx == 400 or self.idx == 500 or self.idx == 600 or self.idx == 700:
             path = self.out_img_dir + '/' + 'flame_' + str(self.idx) + '_heat.png'
             mpimg.imsave(path, heat, cmap='hot')
             path = self.out_img_dir + '/' + 'flame_' + str(self.idx) + '.png'
