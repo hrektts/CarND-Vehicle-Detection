@@ -18,8 +18,9 @@ The goals / steps of this project are the following:
 [window3]: ./output_images/window_3.png
 [window4]: ./output_images/window_4.png
 [window5]: ./output_images/window_5.png
-[image4]: ./examples/sliding_window.jpg
-[image5]: ./examples/bboxes_and_heat.png
+[detected1]: ./output_images/test1_detected.jpg
+[detected2]: ./output_images/test6_detected.jpg
+[ima]: ./examples/bboxes_and_heat.png
 [image6]: ./examples/labels_map.png
 [image7]: ./examples/output_bboxes.png
 [video1]: ./project_video.mp4
@@ -46,13 +47,13 @@ I tried various combinations of parameters and chose following convination:
 - The number of pixels per cell: 8
 - The number of cells per block: 2
 
-For the color space, I tried `RGB`, `HSV`, `HLS` and `LUV` other than `YCrCb`.  These color spaces achieved lower test accuracy of the classifier and got more false positives on vehicle detection compared with `YCrCb`.  Regarding the channel of the image, using single channel increased the number of false positives.  As for the remaining parameters, I chosed to reduce false positives on the classification.
+For the color space, I tried `RGB`, `HSV`, `HLS` and `LUV` other than `YCrCb`.  These color spaces achieved lower test accuracy on the classifier and got more false positives on vehicle detection compared with `YCrCb`.  Regarding the channel of the image, using single channel increased the number of false positives.  As for the remaining parameters, I chosed to reduce false positives on the classification.
 
 ## Binned color feature and histogram feature extraction
 
 The code for this step is contained in lines 11 through 40 of the file called `feature_extractor.py`.
 
-In addition to HOG feature, I decided to use color features, which are binned color feature and histogram feature, for my SVM classifier.  I converted each image to `LUV` color space in advance. For binned color feature, I converted each image to a `32 x 32` pixel image and used it as a feature.  Regarding the histogram feature, I calculated histogram of each color channnel with `32` bins, and use them for feature.  I tried different values and combinations of parameter. As a result, I found that these parameter could detect all the cars shown in the video.
+In addition to HOG feature, I decided to use color features, which are binned color feature and histogram feature, for my SVM classifier.  I converted each image to `LUV` color space in advance. For binned color feature, I converted each image to a `32 x 32` pixel image and used it as a feature.  Regarding the histogram feature, I calculated histogram of each color channnel with `32` bins, and use them for feature.  Though I tried different values and combinations of parameter, I found that these parameter could detect all the cars shown in the video.
 
 ## SVM classifier
 
@@ -64,8 +65,6 @@ Then I trained a `sklearn.svm.LinearSVC` using features conputed above.  As a re
 
 ## Sliding Window Search
 
-####1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
-
 I decided to search the image with windows with 6 different scalse as shown below:
 
 | Scale: 1.0           | Scale: 1.6           | Scale: 2.2           |
@@ -76,11 +75,13 @@ I decided to search the image with windows with 6 different scalse as shown belo
 |----------------------|----------------------|----------------------|
 | ![Window-3][window3] | ![Window-4][window4] | ![Window-5][window5] |
 
-####2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
+Each window are overlapped by 25 percent.  I decided the scales and search scope as above to cover the area where cars would be present.  The sliding window search provided some false positives, and I ignored these by the number of overlapes.  Concretely, I ignored places where the overlap is `8` or less.
 
-Ultimately I searched on two scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.  Here are some example images:
+As a result, I got images as below:
 
-![alt text][image4]
+![Detected-1][detected1]
+![Detected-2][detected2]
+
 ---
 
 ### Video Implementation
