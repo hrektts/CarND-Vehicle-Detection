@@ -20,10 +20,15 @@ The goals / steps of this project are the following:
 [window5]: ./output_images/window_5.png
 [detected1]: ./output_images/test1_detected.jpg
 [detected2]: ./output_images/test6_detected.jpg
-[ima]: ./examples/bboxes_and_heat.png
-[image6]: ./examples/labels_map.png
-[image7]: ./examples/output_bboxes.png
-[video1]: ./project_video.mp4
+[frame300]: ./output_images/flame_300.png
+[frame400]: ./output_images/flame_400.png
+[frame500]: ./output_images/flame_500.png
+[frame600]: ./output_images/flame_600.png
+[heat300]: ./output_images/flame_300_heat.png
+[heat400]: ./output_images/flame_400_heat.png
+[heat500]: ./output_images/flame_500_heat.png
+[heat600]: ./output_images/flame_600_heat.png
+
 
 ## Histogram of Oriented Gradients (HOG) feature extraction
 
@@ -75,7 +80,7 @@ I decided to search the image with windows with 6 different scalse as shown belo
 |----------------------|----------------------|----------------------|
 | ![Window-3][window3] | ![Window-4][window4] | ![Window-5][window5] |
 
-Each window are overlapped by 25 percent.  I decided the scales and search scope as above to cover the area where cars would be present.  The sliding window search provided some false positives, and I ignored these by the number of overlapes.  Concretely, I ignored places where the overlap is `8` or less.
+Each window was overlapped by 25 percent.  I decided the scales and search scope as above to cover the area where cars would be present.  The sliding window search provided some false positives, and I ignored these by the number of overlapes.  Concretely, I ignored places where the overlap is `8` or less.
 
 As a result, I got images as below:
 
@@ -84,34 +89,35 @@ As a result, I got images as below:
 
 ---
 
-### Video Implementation
+## Video Implementation
 
-####1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
 Here's a [link to my video result](./project_video.mp4)
 
 
 ####2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
 
-I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.
+I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  In addition to these, I mixed previously detected bouding boxes with current detected ones to ignore false positives.  This is based on the feature that false positives are less likely to be detected in consecutive frames.
 
-Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the last frame of video:
+Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes:
 
-### Here are six frames and their corresponding heatmaps:
+| Bounding box (Flame 300) | Heatmap (Flame 300)   |
+|--------------------------|-----------------------|
+| ![BBox-300][frame300]    | ![H-map-300][heat300] |
 
-![alt text][image5]
+| Bounding box (Flame 400) | Heatmap (Flame 400)   |
+|--------------------------|-----------------------|
+| ![BBox-400][frame400]    | ![H-map-400][heat400] |
 
-### Here is the output of `scipy.ndimage.measurements.label()` on the integrated heatmap from all six frames:
-![alt text][image6]
+| Bounding box (Flame 500) | Heatmap (Flame 500)   |
+|--------------------------|-----------------------|
+| ![BBox-500][frame500]    | ![H-map-500][heat500] |
 
-### Here the resulting bounding boxes are drawn onto the last frame in the series:
-![alt text][image7]
-
-
+| Bounding box (Flame 600) | Heatmap (Flame 600)   |
+|--------------------------|-----------------------|
+| ![BBox-600][frame600]    | ![H-map-600][heat600] |
 
 ---
 
-###Discussion
+## Discussion
 
-####1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
-
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.
+My sliding window search with SVM classifier did not work well without frame by frame compensation.  Compensation using several video frames worked well, however, this aproach provided delay because the compensation works as low pass filter.  I think this have to be improved if accute detections are needed.
