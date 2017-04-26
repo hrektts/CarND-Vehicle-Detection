@@ -73,13 +73,13 @@ class ImageProcessor:
         self.params['hog_channel'] = 'ALL'
 
         self.p_heat = None
-        self.pp_heat = None
         self.idx = 0
 
     def reset(self):
         """ Reset image processor
         """
         self.idx = 0
+        self.p_heat = None
 
     def train_classifier(self):
         """ Train SVC
@@ -130,7 +130,7 @@ class ImageProcessor:
         x_train, x_test, y_train, y_test = train_test_split(
             scaled_x, y, test_size=0.2, random_state=np.random.randint(0, 100))
 
-        clf = LinearSVC()
+        clf = LinearSVC(C=0.01)
 
         logger.debug('train SVC...')
         clf.fit(x_train, y_train)
@@ -225,7 +225,7 @@ class ImageProcessor:
                 plt.title('Hog Ch-{0}'.format(channel+1))
                 idx += 1
         plt.subplots_adjust(left=0.02, bottom=0.02, right=0.98, top=0.98,
-                             wspace=0.5, hspace=0.)
+                            wspace=0.5, hspace=0.)
         plt.savefig(self.out_img_dir + '/' + 'converted_image.png', bbox_inches='tight')
 
     def draw_window(self, image=None):
@@ -368,18 +368,15 @@ class ImageProcessor:
         heat = np.zeros_like(image[:, :, 0]).astype(np.float)
         heat = bb.add_heat(heat, bboxes)
         if self.p_heat is not None:
-            heat = heat * 0.6 + self.p_heat * 0.4
-        if self.pp_heat is not None:
-            heat = heat * 0.8 + self.pp_heat * 0.2
-        heat = bb.apply_threshold(heat, 13)
+            heat = heat * 0.3 + self.p_heat * 0.7
+        heat = bb.apply_threshold(heat, 8)
         heatmap = np.clip(heat, 0, 255)
         labels = label(heatmap)
         draw_image = bb.draw_labeled_bboxes(draw_image, labels)
 
-        self.pp_heat = self.p_heat
         self.p_heat = heat
 
-        if self.idx == 400 or self.idx == 500 or self.idx == 600 or self.idx == 700:
+        if True or self.idx == 400 or self.idx == 500 or self.idx == 600 or self.idx == 700:
             path = self.out_img_dir + '/' + 'flame_' + str(self.idx) + '_heat.png'
             mpimg.imsave(path, heat, cmap='hot')
             path = self.out_img_dir + '/' + 'flame_' + str(self.idx) + '.png'
@@ -412,9 +409,9 @@ def main():
                          '../data/non-vehicles/',
                          '../data/',
                          '../output_images/')
-    ooo.scales = np.linspace(1, 4.0, 6)
-    ooo.ystarts = np.linspace(380, 350, 6, dtype=np.int)
-    ooo.ystops = np.linspace(600, 800, 6, dtype=np.int)
+    ooo.scales = np.linspace(1.5, 3.5, 6)
+    ooo.ystarts = np.linspace(400, 350, 6, dtype=np.int)
+    ooo.ystops = np.linspace(656, 800, 6, dtype=np.int)
 
     if force:
         ooo.train_classifier()
