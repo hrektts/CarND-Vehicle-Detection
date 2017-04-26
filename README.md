@@ -21,11 +21,19 @@ The goals / steps of this project are the following:
 [heat2]: ./output_images/test2_heat.png
 [heat3]: ./output_images/test3_heat.png
 [heat4]: ./output_images/test4_heat.png
+[bbox501]: ./output_images/flame_501.png
+[bbox502]: ./output_images/flame_502.png
+[bbox503]: ./output_images/flame_503.png
+[bbox504]: ./output_images/flame_504.png
+[heat501]: ./output_images/flame_501_heat.png
+[heat502]: ./output_images/flame_502_heat.png
+[heat503]: ./output_images/flame_503_heat.png
+[heat504]: ./output_images/flame_504_heat.png
 
 
 ## Histogram of Oriented Gradients (HOG) feature extraction
 
-The code for this step is contained in the fifth and sixth code cell of the IPython notebook.
+The code for this step is contained in the fourth code cell of the IPython notebook.
 
 I started by reading in all the `vehicle` and `non-vehicle` images.  Here is an example of one of each of the `vehicle` and `non-vehicle` classes:
 
@@ -49,19 +57,21 @@ For the color space, I tried `RGB`, `HSV`, `HLS` and `LUV` other than `YCrCb`.  
 
 ## Binned color feature and histogram feature extraction
 
-The code for this step is contained in the fifth and sixth code cell of the IPython notebook.
+The code for this step is contained in the fourth code cell of the IPython notebook.
 
 In addition to HOG feature, I decided to use color features, which are binned color feature and histogram feature, for my SVM classifier.  I converted each image to `YCrCb` color space in advance. For binned color feature, I converted each image to a `32 x 32` pixel image and used it as a feature.  Regarding the histogram feature, I calculated histogram of each color channnel with `32` bins, and use them for feature.  Though I tried different values and combinations of parameter, I found that these parameter could detect all the cars shown in the video.
 
 ## SVM classifier
 
-The code for this step is contained in lines 84 through 157 of the file called `find_car.py`.
+The code for this step is contained in the fifth code cell of the IPython notebook.
 
 Before I train SVM, I extracted all the images into three features introduced above, and concatenated as a vector.  To prevent some feature from dominating in the following step, I normalized a feature vector usinge `sklearn.preprocessing.StandardScaler`.  After normalization, I randomly splited all the images into 90 percent for training set and 10 percent for test set.
 
-Then I trained a `sklearn.svm.LinearSVC` using features conputed above.  As a result of training, the test accuracy was 98.4 percent.
+Then I trained a `sklearn.svm.LinearSVC` using features conputed above.  I tried several `C` values to avoid overfitting and found that small `C` values increase false positives. Consequently, I use `1.0` for `C` of the `LinearSVC`. As a result of training, the test accuracy was 98.4 percent.
 
 ## Sliding Window Search
+
+The code for this step is contained in the sixth code cell of the IPython notebook.
 
 I decided to search the image with windows as shown below:
 
@@ -73,10 +83,10 @@ As a result, I got images as below:
 
 | Bounding box      | Heatmap           |
 |-------------------|-------------------|
-| ![B-Box-1][bbox1] | ![H-map-1][heat1] |
-| ![B-Box-2][bbox2] | ![H-map-2][heat2] |
-| ![B-Box-3][bbox3] | ![H-map-1][heat3] |
-| ![B-Box-4][bbox4] | ![H-map-1][heat4] |
+| ![BBox-1][bbox1] | ![H-map-1][heat1] |
+| ![BBox-2][bbox2] | ![H-map-2][heat2] |
+| ![BBox-3][bbox3] | ![H-map-1][heat3] |
+| ![BBox-4][bbox4] | ![H-map-1][heat4] |
 
 ---
 
@@ -88,10 +98,12 @@ I recorded the positions of positive detections in each frame of the video.  Fro
 
 Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes:
 
-| Bounding box (Flame 300) | Heatmap (Flame 300)   |
-|--------------------------|-----------------------|
-| ![BBox-300][frame300]    | ![H-map-300][heat300] |
-
+| Flame # | Bounding box             | Heatmap               |
+|---------|--------------------------|-----------------------|
+| 501     | ![BBox-501][bbox501]     | ![H-map-501][heat501] |
+| 502     | ![BBox-502][bbox502]     | ![H-map-502][heat502] |
+| 503     | ![BBox-503][bbox503]     | ![H-map-503][heat503] |
+| 504     | ![BBox-504][bbox504]     | ![H-map-504][heat504] |
 
 ---
 
