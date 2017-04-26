@@ -96,7 +96,7 @@ Here's a [link to my video result](./output_images/project_video.mp4)
 
 I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  In addition to these, I applied exponential smoothing to ignore false positives.  This is based on the feature that false positives are less likely to be detected in consecutive frames.
 
-Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes:
+Here's an example result showing the bounding boxes and the heatmaps from a series of frames of video:
 
 | Flame # | Bounding box             | Heatmap               |
 |---------|--------------------------|-----------------------|
