@@ -98,7 +98,7 @@ I recorded the positions of positive detections in each frame of the video.  Fro
 
 Here's an example result showing the bounding boxes and the heatmaps from a series of frames of video:
 
-| Flame # | Bounding box             | Heatmap               |
+| Frame # | Bounding box             | Heatmap               |
 |---------|--------------------------|-----------------------|
 | 501     | ![BBox-501][bbox501]     | ![H-map-501][heat501] |
 | 502     | ![BBox-502][bbox502]     | ![H-map-502][heat502] |
