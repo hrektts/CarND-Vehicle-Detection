@@ -71,9 +71,12 @@ Each window was overlapped by 75 percent.  I decided the scale of the window and
 
 As a result, I got images as below:
 
-| Bounding box | Heatmap (Flame 300)   |
-|--------------------------|-----------------------|
-| ![BBox-300][frame300]    | ![H-map-300][heat300] |
+| Bounding box      | Heatmap           |
+|-------------------|-------------------|
+| ![B-Box-1][bbox1] | ![H-map-1][heat1] |
+| ![B-Box-2][bbox2] | ![H-map-2][heat2] |
+| ![B-Box-3][bbox3] | ![H-map-1][heat3] |
+| ![B-Box-4][bbox4] | ![H-map-1][heat4] |
 
 ---
 
